@@ -1,0 +1,33 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      nakama-runtime:
+        specifier: github:heroiclabs/nakama-common
+        version: https://codeload.github.com/heroiclabs/nakama-common/tar.gz/7ff36389d8979fc6e2c24ba6ad9e73bd3bfb7d7a
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+packages:
+
+  nakama-runtime@https://codeload.github.com/heroiclabs/nakama-common/tar.gz/7ff36389d8979fc6e2c24ba6ad9e73bd3bfb7d7a:
+    resolution: {tarball: https://codeload.github.com/heroiclabs/nakama-common/tar.gz/7ff36389d8979fc6e2c24ba6ad9e73bd3bfb7d7a}
+    version: 1.42.0
+
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+snapshots:
+
+  nakama-runtime@https://codeload.github.com/heroiclabs/nakama-common/tar.gz/7ff36389d8979fc6e2c24ba6ad9e73bd3bfb7d7a: {}
+
+  typescript@5.9.3: {}
