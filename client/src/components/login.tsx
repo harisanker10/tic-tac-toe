@@ -18,6 +18,7 @@ const Login: React.FC = () => {
       await login(email, password);
       console.log("Login successful!");
     } catch (err: any) {
+      console.log(err);
       setError(err.message || "Login failed. Please try again.");
     } finally {
       setIsLoading(false);
@@ -68,7 +69,7 @@ const Login: React.FC = () => {
         <div className="nes-field">
           <label htmlFor="email">Email</label>
           <input
-            type="email"
+            type="text"
             id="email"
             className="nes-input is-dark"
             placeholder="super@heroes.com"
@@ -112,7 +113,12 @@ const Login: React.FC = () => {
           <button
             type="button"
             className="nes-btn is-success"
-            onClick={() => handleDemoLogin("super@heroes.com", "batsignal")}
+            onClick={() =>
+              handleDemoLogin(
+                `user-${Math.round(Math.random() * 1000)}@mail.comm`,
+                "batsignal",
+              )
+            }
             disabled={isLoading}
           >
             Use Demo Account

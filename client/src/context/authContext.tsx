@@ -1,17 +1,24 @@
 // contexts/NakamaContext.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { Client, Session } from "@heroiclabs/nakama-js";
+import { Client, Session, type Socket } from "@heroiclabs/nakama-js";
 
+interface User {
+  username: string;
+  email: string;
+}
 interface NakamaContextType {
   client: Client;
   session: Session | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<Session>;
+  user: User | null;
+  login: (username: string, password: string) => Promise<Session>;
+  socket: Socket | null;
   logout: () => void;
   loading: boolean;
 }
 
 const NakamaContext = createContext<NakamaContextType | undefined>(undefined);
+const [TOKEN, REFRESH] = ["NAKAMA_TOKEN", "NAKAMA_REFRESH_TOKEN"];
 
 export const NakamaProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -19,71 +26,109 @@ export const NakamaProvider: React.FC<{ children: React.ReactNode }> = ({
   const [client] = useState(
     () => new Client("defaultkey", "127.0.0.1", "7350", false),
   );
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState({
+    session: null as Session | null,
+    user: null as User | null,
+    socket: null as Socket | null,
+    loading: true,
+  });
+
+  const updateState = (updates: Partial<typeof state>) =>
+    setState((prev) => ({ ...prev, ...updates }));
 
   const login = async (email: string, password: string): Promise<Session> => {
     try {
-      const newSession = await client.authenticateEmail(email, password);
-      setSession(newSession);
-      return newSession;
-    } catch (error) {
-      console.error("Login failed:", error);
-      throw error;
+      const session = await client.authenticateEmail(
+        email,
+        password,
+        true,
+        email.split("@")[0],
+      );
+      const account = await client.getAccount(session);
+      localStorage.setItem(TOKEN, session.token);
+      localStorage.setItem(REFRESH, session.refresh_token);
+      updateState({
+        session,
+        user: {
+          email: account.email || "",
+          username: account.user?.username || "",
+        },
+      });
+      return session;
+    } catch (error: any) {
+      const data = await error.json();
+      console.log({ data });
+      throw new Error(data.message);
     }
   };
 
   const logout = () => {
-    setSession(null);
+    state.socket?.disconnect(false);
+    localStorage.removeItem(TOKEN);
+    localStorage.removeItem(REFRESH);
+    updateState({ session: null, user: null, socket: null });
   };
 
-  // Optional: Check for existing session on mount
   useEffect(() => {
-    const checkExistingSession = async () => {
-      // You might want to check localStorage for stored session
-      const storedSession = localStorage.getItem("nakama_session");
-      if (storedSession) {
+    (async () => {
+      const token = localStorage.getItem(TOKEN);
+      const refresh = localStorage.getItem(REFRESH);
+
+      if (token && refresh) {
         try {
-          const sessionObj = JSON.parse(storedSession);
-          // Verify session is still valid
-          setSession(sessionObj);
-        } catch (error) {
-          localStorage.removeItem("nakama_session");
+          const session = await client.sessionRefresh(
+            Session.restore(token, refresh),
+          );
+          const account = await client.getAccount(session);
+          localStorage.setItem(TOKEN, session.token);
+          localStorage.setItem(REFRESH, session.refresh_token);
+          updateState({
+            session,
+            user: {
+              email: account.email || "",
+              username: account.user?.username || "",
+            },
+          });
+        } catch {
+          localStorage.removeItem(TOKEN);
+          localStorage.removeItem(REFRESH);
         }
       }
-      setLoading(false);
-    };
+      updateState({ loading: false });
+    })();
+  }, [client]);
 
-    checkExistingSession();
-  }, []);
-
-  // Store session in localStorage when it changes
   useEffect(() => {
-    if (session) {
-      localStorage.setItem("nakama_session", JSON.stringify(session));
-    } else {
-      localStorage.removeItem("nakama_session");
+    if (state.session && !state.socket) {
+      const socket = client.createSocket();
+      socket
+        .connect(state.session, true)
+        .then(() => updateState({ socket }))
+        .catch(logout);
     }
-  }, [session]);
-
-  const value: NakamaContextType = {
-    client,
-    session,
-    isAuthenticated: !!session,
-    login,
-    logout,
-    loading,
-  };
+  }, [state.session, client]);
 
   return (
-    <NakamaContext.Provider value={value}>{children}</NakamaContext.Provider>
+    <NakamaContext.Provider
+      value={{
+        client,
+        session: state.session,
+        socket: state.socket,
+        user: state.user,
+        isAuthenticated: !!state.session,
+        login,
+        logout,
+        loading: state.loading,
+      }}
+    >
+      {children}
+    </NakamaContext.Provider>
   );
 };
 
-export const useNakama = (): NakamaContextType => {
+export const useNakama = () => {
   const context = useContext(NakamaContext);
-  if (context === undefined) {
+  if (!context)
     throw new Error("useNakama must be used within a NakamaProvider");
-  }
   return context;
 };

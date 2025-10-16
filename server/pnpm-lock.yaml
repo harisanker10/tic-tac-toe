@@ -7,10 +7,11 @@ settings:
 importers:
 
   .:
-    devDependencies:
+    dependencies:
       nakama-runtime:
         specifier: github:heroiclabs/nakama-common
         version: https://codeload.github.com/heroiclabs/nakama-common/tar.gz/7ff36389d8979fc6e2c24ba6ad9e73bd3bfb7d7a
+    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
