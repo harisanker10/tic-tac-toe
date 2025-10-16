@@ -4,8 +4,21 @@ let rpcFindMatch: nkruntime.RpcFunction = function (
   nk: nkruntime.Nakama,
   payload: string,
 ): string {
-  const matches = nk.matchList(10, true, null, 1, 1);
+  const limit = 10;
+  const isAuthoritative = true;
+  const label = "open=true";
+  const minSize = null;
+  const maxSize = null;
+  const matches = nk.matchList(
+    limit,
+    isAuthoritative,
+    label,
+    minSize,
+    maxSize,
+    "",
+  );
   const existingMatchIds = matches.map((m) => m.matchId);
+  logger.debug(existingMatchIds.join(", "));
 
   if (existingMatchIds.length === 0) {
     const newMatchId = nk.matchCreate(moduleName);
@@ -21,7 +34,7 @@ let rpcFindOngoingMatch: nkruntime.RpcFunction = function (
   nk: nkruntime.Nakama,
   payload: string,
 ): string {
-  const query = `+label.user0:${ctx.userId} +label.user1:${ctx.userId}`;
+  const query = `+label.isOpen:true`;
   const matches = nk.matchList(1, true, query);
 
   logger.debug(

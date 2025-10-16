@@ -3,7 +3,7 @@ data_dir: ./data/
 
 logger:
   # stdout: true
-  level: DEBUG
+  level: INFO
   file: /nakama/data/logfile.log
 
 runtime:

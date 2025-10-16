@@ -11,10 +11,12 @@ export function Board() {
     mark,
     makeMove,
     currentTurn,
+    leaveMatch,
     winStatus,
     resetDeadline,
   } = useMatch();
   const [timeLeft, setTimeLeft] = useState<number | null>(resetDeadline);
+  const [optimisticBoard, setOptimisticBoard] = useState(board || []);
 
   useEffect(() => {
     if (!resetDeadline) {
@@ -29,7 +31,13 @@ export function Board() {
 
     return () => clearInterval(interval);
   }, [resetDeadline]);
+  useEffect(() => {
+    setOptimisticBoard(board || []);
+  }, [board]);
   const handleClick = async (pos: number) => {
+    const optimisticBoardUpdate = [...optimisticBoard];
+    optimisticBoard[pos] = mark;
+    setOptimisticBoard(optimisticBoardUpdate);
     await makeMove(pos);
   };
   return (
@@ -46,15 +54,21 @@ export function Board() {
           <p className="title">Opponent</p>
           {opponent?.isOffline && <p className="title">(offline)</p>}
           <p className="text-lg font-bold text-red-600">
-            {opponent?.username} {opponent?.mark === Mark.X ? "X" : "O"}
+            {!opponent ? (
+              "Finding opponent"
+            ) : (
+              <>
+                {opponent?.username} {opponent?.mark === Mark.X ? "X" : "O"}
+              </>
+            )}
           </p>
         </div>
       </div>
 
       {/* Game Board */}
       <div className="grid grid-cols-3 gap-1 w-fit mx-auto mb-6">
-        {board?.length &&
-          board.map((mark, index) => (
+        {optimisticBoard?.length &&
+          optimisticBoard.map((mark, index) => (
             <button
               key={index}
               className="w-20 h-20 border-2 border-gray-400 bg-white hover:bg-gray-50 flex items-center justify-center text-2xl font-bold"
@@ -92,7 +106,7 @@ export function Board() {
         <button
           type="button"
           className="nes-btn is-error"
-          onClick={() => console.log("Leave game clicked")}
+          onClick={() => leaveMatch()}
         >
           Leave Game
         </button>

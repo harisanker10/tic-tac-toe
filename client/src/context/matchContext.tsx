@@ -15,6 +15,7 @@ interface MatchContextType {
   findMatch: () => Promise<void>;
   isPlaying: boolean;
   board: Board | null;
+  leaveMatch: () => Promise<void>;
   opponent: {
     username: string;
     id: string;
@@ -25,6 +26,7 @@ interface MatchContextType {
   makeMove: (pos: number) => Promise<void>;
   resetDeadline: number | null;
   currentTurn: Mark | null;
+  error: string | null;
   winStatus: {
     winner: Mark;
     position: (typeof winningPositions)[number];
@@ -54,23 +56,36 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({
   const [currentTurn, setCurrentTurn] = useState<Mark | null>(null);
   const [resetDeadline, setResetDeadline] = useState<number | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     (async () => {
       if (session) {
+        //TODO: fetch with userId query
         const matches = await client.listMatches(session);
-        const matchId = matches.matches?.length && matches.matches[0].match_id;
-        console.log({ rejoinMatchId: matchId });
-        if (matchId) {
-          setMatchId(matchId);
+        try {
+          const match = matches.matches
+            ?.map((m) => ({
+              id: m.match_id,
+              label: m.label ? JSON.parse(m.label) : {},
+            }))
+            .find((l) => l.label.users?.includes(session.user_id));
+          console.log({ existingMatch: match });
+          const matchId = match?.id;
+          if (matchId) {
+            setMatchId(matchId);
 
-          if (socket) {
-            console.log("rejoining...");
-            await socket.joinMatch(matchId);
-          } else {
-            console.log("no socket");
+            if (socket) {
+              console.log("rejoining...");
+              await socket.joinMatch(matchId).catch((err) => console.log(err));
+            } else {
+              console.log("no socket");
+            }
+            setIsPlaying(true);
+            setIsFinding(false);
           }
-          setIsPlaying(true);
-          setIsFinding(false);
+        } catch (error) {
+          console.log(error);
         }
       }
     })();
@@ -86,8 +101,7 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({
       //selecting the first match the server returns
       //@ts-ignore
       const matchId = result?.payload?.matchIds[0] as string;
-      localStorage.setItem("ongoing_match_id", matchId);
-      socket?.joinMatch(matchId);
+      socket?.joinMatch(matchId).catch((err) => console.log(err));
       setMatchId(matchId);
       return result;
     } catch (error) {
@@ -104,6 +118,12 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({
     console.log({ matchId, data });
     await socket.sendMatchState(matchId!, OpCode.MOVE, JSON.stringify(data));
     console.log("Match data sent");
+  };
+
+  const leaveMatch = async () => {
+    matchId &&
+      (await socket?.leaveMatch(matchId!).catch((err) => console.log(err)));
+    setIsPlaying(false);
   };
 
   if (socket) {
@@ -142,34 +162,39 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({
           break;
         }
         case OpCode.UPDATE: {
+          setError(null);
           const updateData = payload as UpdateMessage;
           setBoard(updateData.board);
           setCurrentTurn(updateData.turn);
           setIsPlaying(true);
-          if (
-            !opponent ||
-            !mark ||
-            (updateData.marks && mark !== updateData.marks[session!.user_id!])
-          )
-            Object.entries(updateData.marks).forEach(
-              async ([user_id, mark]) => {
-                if (user_id === session!.user_id!) {
-                  setMark(updateData.marks[session!.user_id!]);
-                } else {
-                  const opponent = await client
-                    .getUsers(session!, [user_id])
-                    .then((d) => d.users && d.users[0]);
-                  if (opponent) {
-                    setOpponent({
-                      id: opponent.id!,
-                      username: opponent.username!,
-                      mark: mark!,
-                      isOffline: false,
-                    });
-                  }
-                }
-              },
-            );
+          if (updateData.winner) {
+            setWinStatus({
+              winner: updateData.winner,
+              position: updateData.winningPosition as any,
+            });
+          }
+          if (updateData.resetDeadline) {
+            setResetDeadline(updateData.resetDeadline);
+          }
+          Object.entries(updateData.marks).forEach(async ([user_id, mark]) => {
+            if (user_id === session!.user_id!) {
+              setMark(updateData.marks[session!.user_id!]);
+            } else {
+              const updatedOpp =
+                opponent?.id !== user_id &&
+                (await client
+                  .getUsers(session!, [user_id])
+                  .then((d) => d.users && d.users[0]));
+              if (updatedOpp) {
+                setOpponent({
+                  id: updatedOpp.id!,
+                  username: updatedOpp.username!,
+                  mark: mark!,
+                  isOffline: false,
+                });
+              }
+            }
+          });
 
           if (Number.isInteger(updateData.winner) && updateData.winningPosition)
             setWinStatus({
@@ -189,6 +214,20 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({
             winner: doneData.winner!,
           });
           setResetDeadline(doneData.resetDeadline);
+          break;
+        }
+        case OpCode.REJECTED: {
+          if (
+            payload.error === "Player forfeited" &&
+            payload?.userId !== session?.user_id
+          ) {
+            if (isPlaying) {
+              setIsFinding(true);
+              setIsPlaying(false);
+            }
+          }
+          payload.error && setError(payload.error);
+          setError(payload.error);
           break;
         }
         default:
@@ -224,10 +263,12 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const value: MatchContextType = {
     findMatch,
+    leaveMatch,
     isFinding,
     isPlaying,
     board,
     mark,
+    error,
     opponent,
     currentTurn,
     makeMove,

@@ -1,6 +1,8 @@
 const moduleName = "tic-tac-toe";
 interface State {
   emptyTicks: number;
+  openTicks: number;
+  label: { open: boolean; users: string[] /*userId[]*/ };
   presences: Record<string, nkruntime.Presence | null>;
   isPlaying: boolean;
   board: Board;
@@ -9,6 +11,7 @@ interface State {
   winner: Mark | null;
   winningPosition: (typeof winningPositions)[number] | null;
   resetDeadline: number | null;
+  disconnectedUsers: string[]; //userId[]
 }
 
 const winningPositions = [
@@ -33,6 +36,8 @@ const matchInit = function (
 ): { state: nkruntime.MatchState; tickRate: number; label: string } {
   const state: State = {
     emptyTicks: 0,
+    openTicks: 0,
+    label: { open: true, users: [] },
     presences: {},
     marks: {},
     turn: Mark.X,
@@ -41,11 +46,40 @@ const matchInit = function (
     winner: null,
     winningPosition: null,
     resetDeadline: null,
+    disconnectedUsers: [],
   };
   return {
     state,
     tickRate: 1,
     label: JSON.stringify({ userIds: [] }),
+  };
+};
+
+const matchJoinAttempt: nkruntime.MatchJoinAttemptFunction = function (
+  ctx: nkruntime.Context,
+  logger: nkruntime.Logger,
+  nk: nkruntime.Nakama,
+  dispatcher: nkruntime.MatchDispatcher,
+  tick: number,
+  state: nkruntime.MatchState,
+  presence: nkruntime.Presence,
+): { state: nkruntime.MatchState; accept: boolean } {
+  const disconnectedUserIndex: number =
+    ctx.userId &&
+    state.disconnectedUsers !== null &&
+    state.disconnectedUsers.indexOf(ctx.userId);
+  //rejoin
+
+  let accept = false;
+  if (typeof disconnectedUserIndex === "number" && disconnectedUserIndex >= 0) {
+    accept = true;
+  }
+  if (state.label.open && totalConnectedPlayers(state) < 2) {
+    accept = true;
+  }
+  return {
+    state,
+    accept,
   };
 };
 
@@ -55,21 +89,42 @@ const matchJoin = function (
   nk: nkruntime.Nakama,
   dispatcher: nkruntime.MatchDispatcher,
   tick: number,
-  state: nkruntime.MatchState,
+  matchState: nkruntime.MatchState,
   presences: nkruntime.Presence[],
 ): { state: nkruntime.MatchState } | null {
+  const state = matchState as State;
+  // invalid players are filtered out at matchJoinAttempt so we can safely update presences
   presences.forEach(function (p) {
     state.presences[p.userId] = p;
+    // check if the presence is a rejoin
+    const disconnectedUserIndex = state.disconnectedUsers.indexOf(p.userId);
+    if (disconnectedUserIndex >= 0) {
+      const message: UpdateMessage = {
+        board: state.board,
+        marks: state.marks,
+        turn: state.turn,
+        resetDeadline: state.resetDeadline,
+        winner: state.winner!,
+        winningPosition: state.winningPosition,
+      };
+
+      (state as State).disconnectedUsers?.splice(disconnectedUserIndex, 1);
+      dispatcher.broadcastMessage(OpCode.UPDATE, JSON.stringify(message), [p]);
+    }
   });
 
-  //rejoin
-  if (ctx.userId && ctx.userId in (state as State).presences) {
-    return { state };
-  }
+  // check if we have enough players and start
+  if (
+    totalConnectedPlayers(state) === 2 &&
+    !state.isPlaying &&
+    state.label.open
+  ) {
+    logger.debug("initing join");
+    state.label.open = false;
+    state.label.users = Object.keys(state.presences);
+    dispatcher.matchLabelUpdate(JSON.stringify(state.label));
 
-  // check if we have enough players
-  if (totalConnectedPlayers(state) === 2 && !state.isPlaying) {
-    // start match
+    resetBoard(state as State);
     state.isPlaying = true;
     const MARKS = [Mark.X, Mark.O];
     const marks: Record<string, Mark | null> = {};
@@ -78,20 +133,13 @@ const matchJoin = function (
     });
     state.marks = marks;
 
+    logger.debug("sending message");
     const message: StartMessage = {
       board: state.board,
       marks,
       turn: Mark.X,
     };
     dispatcher.broadcastMessage(OpCode.START, JSON.stringify(message));
-
-    const label: Record<string, string> = {};
-
-    Object.keys(state.presences).forEach((userId, index) => {
-      label[`user${index}`] = userId;
-    });
-
-    dispatcher.matchLabelUpdate(JSON.stringify(label));
   }
 
   return {
@@ -105,47 +153,36 @@ const matchLeave = function (
   nk: nkruntime.Nakama,
   dispatcher: nkruntime.MatchDispatcher,
   tick: number,
-  state: nkruntime.MatchState,
+  matchState: nkruntime.MatchState,
   presences: nkruntime.Presence[],
 ): { state: nkruntime.MatchState } | null {
-  presences.forEach(function (p) {
-    delete state.presences[p.userId];
+  const state = matchState as State;
+
+  presences.forEach((p) => {
+    const isLeave =
+      p.reason?.toString() ===
+      nkruntime.PresenceReason.PresenceReasonLeave.toString();
+
+    if (isLeave) {
+      state.label.open = true;
+      state.label.users = state.label.users.filter((id) => id !== p.userId);
+      dispatcher.matchLabelUpdate(JSON.stringify(state.label));
+      state.isPlaying = false;
+      resetBoard(state);
+      deleteUserFromState(p.userId, state);
+      dispatcher.broadcastMessage(
+        OpCode.REJECTED,
+        JSON.stringify({ error: "Player forfeited", userId: p.userId }),
+      );
+    }
+
+    if (!isLeave) {
+      state.disconnectedUsers?.push(p.userId);
+      delete state.presences[p.userId];
+    }
   });
 
-  return {
-    state,
-  };
-};
-
-const matchJoinAttempt: nkruntime.MatchJoinAttemptFunction = function (
-  ctx: nkruntime.Context,
-  logger: nkruntime.Logger,
-  nk: nkruntime.Nakama,
-  dispatcher: nkruntime.MatchDispatcher,
-  tick: number,
-  state: nkruntime.MatchState,
-  presence: nkruntime.Presence,
-): { state: nkruntime.MatchState; accept: boolean } {
-  logger.debug("Match joinining attempt");
-  //rejoin
-  if (ctx.userId && ctx.userId in (state as State).presences) {
-    const message: UpdateMessage = {
-      board: state.board,
-      marks: state.marks,
-      turn: state.turn,
-      winner: state.winner,
-      resetDeadline: state.resetDeadline,
-      winningPosition: state.winningPosition,
-    };
-
-    dispatcher.broadcastMessage(OpCode.UPDATE, JSON.stringify(message));
-    return { state, accept: true };
-  }
-  const accept = totalConnectedPlayers(state) < 2 ? true : false;
-  return {
-    state,
-    accept,
-  };
+  return { state };
 };
 
 const matchLoop = function (
@@ -158,38 +195,58 @@ const matchLoop = function (
   messages: nkruntime.MatchMessage[],
 ): { state: nkruntime.MatchState } | null {
   const state = matchState as State;
-  // If we have no presences in the match according to the match state, increment the empty ticks count
+  logger.debug(`Total connected players: ${totalConnectedPlayers(state)}`);
+  // logger.debug(`isPlaying: ${state.isPlaying}`);
+  // logger.debug(`open: ${state.label.open}`);
+  // logger.debug(`board: ${state.board.join(" | ")}`);
+
   if (totalConnectedPlayers(state) === 0) {
     state.emptyTicks++;
   }
+  if (totalConnectedPlayers(state) === 1 && !state.label.open) {
+    state.openTicks++;
+  }
+  // if open for 10 ticks -> player disconneced treshold reached so find a new player and update the match state
+  if (state.openTicks >= 10 && !state.label.open) {
+    state.label.open = true;
+    dispatcher.matchLabelUpdate(JSON.stringify(state.label));
+    state.openTicks = 0;
+    dispatcher.broadcastMessage(
+      OpCode.REJECTED,
+      JSON.stringify({ error: "Player forfeited" }),
+    );
+  }
+  // kill game if no players for 100 ticks
   if (state.emptyTicks > 100) {
     return null;
   }
 
-  if (state.isPlaying) {
-    if (state.resetDeadline !== null && state?.resetDeadline <= Date.now()) {
-      state.board = [...Array(9)].map(() => null);
-      state.resetDeadline = null;
-      state.winner = null;
-      state.winningPosition = null;
-      const [user1, user2] = Object.keys(state.marks);
-      state.marks[user1] = state.marks[user1]! + state.marks[user2]!;
-      state.marks[user2] = state.marks[user1]! - state.marks[user2]!;
-      state.marks[user1] = state.marks[user1]! - state.marks[user2]!;
-      state.turn = Mark.X;
+  // if game is done and deadline reached restart the game
+  if (state?.resetDeadline !== null && state?.resetDeadline <= Date.now()) {
+    resetBoard(state);
+    state.isPlaying = true;
+    switchMarks(state);
+    if (totalConnectedPlayers(state) === 2) {
       const message: StartMessage = {
         board: state.board,
         marks: state.marks,
         turn: state.turn,
       };
       dispatcher.broadcastMessage(OpCode.START, JSON.stringify(message));
-      return { state };
+    } else {
+      logger.error(
+        `ending match due to forfeited, total players: ${totalConnectedPlayers(state)}`,
+      );
+      dispatcher.broadcastMessage(
+        OpCode.REJECTED,
+        JSON.stringify({ error: "Player forfeited" }),
+      );
+      return null;
     }
+    return { state };
+  }
 
-    if (state.winner !== null) {
-      return { state };
-    }
-
+  if (state.isPlaying) {
     messages.forEach((message) => {
       let msg = {} as MoveMessage;
 
@@ -200,7 +257,6 @@ const matchLoop = function (
         dispatcher.broadcastMessage(OpCode.REJECTED, null, [message.sender]);
         logger.debug("Bad data received: %v", error);
       }
-
       if (message.opCode === OpCode.MOVE) {
         // chech if its senders turn else reject
         if (state.turn !== state.marks[message.sender.userId]) {
@@ -210,7 +266,6 @@ const matchLoop = function (
           );
           return { state };
         }
-
         // check if position is valid
         if (state.board[msg.position] !== null) {
           dispatcher.broadcastMessage(
@@ -219,6 +274,9 @@ const matchLoop = function (
           );
           return { state };
         }
+
+        logger.debug("updating position: " + msg.position);
+
         state.board[msg.position] = state.marks[message.sender.userId];
         state.turn = state.turn === Mark.X ? Mark.O : Mark.X;
 
@@ -232,45 +290,31 @@ const matchLoop = function (
           JSON.stringify(updateMessage),
         );
 
-        const winData = findWinner(state.board);
-
         // check win
-        if (winData && "mark" in winData) {
-          logger.debug("Won: " + winData.mark);
-
-          state.winner = winData.mark;
-          state.winningPosition = winData.winningPosition;
-          state.resetDeadline = Date.now() + 30000;
-
+        const winData = findWinner(state.board);
+        if (winData) {
+          // reset in 30s
+          state.resetDeadline = Date.now() + 5000;
+          state.isPlaying = false;
+          if ("mark" in winData) {
+            logger.debug("Won: " + winData.mark);
+            state.winner = winData.mark;
+            state.winningPosition = winData.winningPosition;
+          }
           const doneMeassage: DoneMessage = {
             board: state.board,
-            winner: winData.mark,
-            winnerPositions: winData.winningPosition,
+            winner: state.winner,
+            winnerPositions: state.winningPosition,
             resetDeadline: state.resetDeadline,
           };
+
           dispatcher.broadcastMessage(
             OpCode.DONE,
             JSON.stringify(doneMeassage),
           );
+        } else {
+          logger.debug("No win data");
         }
-
-        // check draw
-        if (winData && "draw" in winData) {
-          logger.debug("draw");
-          state.resetDeadline = Date.now() + 30000;
-          const doneMeassage: DoneMessage = {
-            board: state.board,
-            winner: null,
-            winnerPositions: null,
-            resetDeadline: state.resetDeadline,
-          };
-          dispatcher.broadcastMessage(
-            OpCode.DONE,
-            JSON.stringify(doneMeassage),
-          );
-        }
-
-        logger.debug("No win data");
       }
     });
   }
@@ -326,4 +370,26 @@ const findWinner = (
   }
   if (board.every((m) => m !== null)) return { draw: true };
   return null;
+};
+
+const resetBoard = (state: State): void => {
+  state.board = [...Array(9)].map(() => null);
+  state.resetDeadline = null;
+  state.winner = null;
+  state.winningPosition = null;
+  state.turn = Mark.X;
+};
+
+const switchMarks = (state: State): void => {
+  const [user1, user2] = Object.keys(state.marks);
+  if (user1 && user2) {
+    state.marks[user1] = state.marks[user1]! + state.marks[user2]!;
+    state.marks[user2] = state.marks[user1]! - state.marks[user2]!;
+    state.marks[user1] = state.marks[user1]! - state.marks[user2]!;
+  }
+};
+
+const deleteUserFromState = (userId: string, state: State) => {
+  delete state.presences[userId];
+  delete state.marks[userId];
 };
