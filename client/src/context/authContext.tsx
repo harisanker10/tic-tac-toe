@@ -21,11 +21,14 @@ interface NakamaContextType {
 const NakamaContext = createContext<NakamaContextType | undefined>(undefined);
 const [TOKEN, REFRESH] = ["NAKAMA_TOKEN", "NAKAMA_REFRESH_TOKEN"];
 
+const serverUrl = "127.0.0.1";
+const port = "7350";
+
 export const NakamaProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [client] = useState(
-    () => new Client("defaultkey", "127.0.0.1", "7350", false),
+    () => new Client("defaultkey", serverUrl, port, false),
   );
   const [state, setState] = useState({
     session: null as Session | null,
