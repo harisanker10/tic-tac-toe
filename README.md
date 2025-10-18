@@ -88,6 +88,7 @@ After this, game will be available at http://localhost:5173
 This query was providing not open matches also. For the scope of this project, I just listed all and filtered.
 
 - Server key is exposed
+- **Client-Side State Management Issues**: There are known issues with client-side state synchronization. If you encounter any problems during gameplay or navigation, **please refresh the page** to reset the application state.
 
 ## References
 
