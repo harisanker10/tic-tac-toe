@@ -309,7 +309,7 @@ const matchLoop = function (
 
         // match is done
         // reset match in 20s
-        state.resetDeadline = Date.now() + 2000000;
+        state.resetDeadline = Date.now() + 20000;
         state.isPlaying = false;
 
         if ("mark" in winData) {
