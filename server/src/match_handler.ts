@@ -51,7 +51,7 @@ const matchInit = function (
   return {
     state,
     tickRate: 1,
-    label: JSON.stringify({ userIds: [] }),
+    label: JSON.stringify({ open: true, userIds: [] }),
   };
 };
 
@@ -159,11 +159,11 @@ const matchLeave = function (
   const state = matchState as State;
 
   presences.forEach((p) => {
-    const isLeave =
+    const isForfeit =
       p.reason?.toString() ===
       nkruntime.PresenceReason.PresenceReasonLeave.toString();
 
-    if (isLeave) {
+    if (isForfeit) {
       state.label.open = true;
       state.label.users = state.label.users.filter((id) => id !== p.userId);
       dispatcher.matchLabelUpdate(JSON.stringify(state.label));
@@ -176,7 +176,7 @@ const matchLeave = function (
       );
     }
 
-    if (!isLeave) {
+    if (!isForfeit) {
       state.disconnectedUsers?.push(p.userId);
       delete state.presences[p.userId];
     }
@@ -195,7 +195,9 @@ const matchLoop = function (
   messages: nkruntime.MatchMessage[],
 ): { state: nkruntime.MatchState } | null {
   const state = matchState as State;
-  logger.debug(`Total connected players: ${totalConnectedPlayers(state)}`);
+  logger.debug(
+    `Total connected players: ${totalConnectedPlayers(state)}, open: ${state.label.open}`,
+  );
   // logger.debug(`isPlaying: ${state.isPlaying}`);
   // logger.debug(`open: ${state.label.open}`);
   // logger.debug(`board: ${state.board.join(" | ")}`);
@@ -209,6 +211,7 @@ const matchLoop = function (
   // if open for 10 ticks -> player disconneced treshold reached so find a new player and update the match state
   if (state.openTicks >= 10 && !state.label.open) {
     state.label.open = true;
+    state.disconnectedUsers = [];
     dispatcher.matchLabelUpdate(JSON.stringify(state.label));
     state.openTicks = 0;
     dispatcher.broadcastMessage(

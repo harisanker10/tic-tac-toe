@@ -4,44 +4,23 @@ let rpcFindMatch: nkruntime.RpcFunction = function (
   nk: nkruntime.Nakama,
   payload: string,
 ): string {
-  const limit = 10;
-  const isAuthoritative = true;
-  const label = "open=true";
-  const minSize = null;
-  const maxSize = null;
-  const matches = nk.matchList(
-    limit,
-    isAuthoritative,
-    label,
-    minSize,
-    maxSize,
-    "",
-  );
-  const existingMatchIds = matches.map((m) => m.matchId);
-  logger.debug(existingMatchIds.join(", "));
+  const matches = nk.matchList(10, true, null, 1, 1);
+  // matches with 1 player might need not be open due to disconnection
+  const openMatches = matches.filter((m) => {
+    try {
+      return JSON.parse(m.label || "{}")?.open === true;
+    } catch {
+      return false;
+    }
+  });
 
-  if (existingMatchIds.length === 0) {
+  let matchIds = openMatches.map((m) => m.matchId);
+
+  if (matchIds.length === 0) {
+    logger.debug("Creating a match...");
     const newMatchId = nk.matchCreate(moduleName);
-    existingMatchIds.push(newMatchId);
+    matchIds = [newMatchId];
   }
 
-  return JSON.stringify({ matchIds: existingMatchIds });
-};
-
-let rpcFindOngoingMatch: nkruntime.RpcFunction = function (
-  ctx: nkruntime.Context,
-  logger: nkruntime.Logger,
-  nk: nkruntime.Nakama,
-  payload: string,
-): string {
-  const query = `+label.isOpen:true`;
-  const matches = nk.matchList(1, true, query);
-
-  logger.debug(
-    `Total ongoing matches ${matches.length} for user ${ctx.userId}`,
-  );
-
-  return JSON.stringify({
-    matchIds: matches.map((m) => m.matchId),
-  });
+  return JSON.stringify({ matchIds });
 };

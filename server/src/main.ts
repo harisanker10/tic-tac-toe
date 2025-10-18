@@ -38,5 +38,4 @@ let InitModule: nkruntime.InitModule = function (
   });
 
   initializer.registerRpc(rpcIdFindMatch, rpcFindMatch);
-  initializer.registerRpc(rpcIdFindOngoingMatch, rpcFindOngoingMatch);
 };
