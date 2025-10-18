@@ -1,6 +1,7 @@
 // contexts/NakamaContext.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Client, Session, type Socket } from "@heroiclabs/nakama-js";
+import { v4 as uuidv4 } from "uuid";
 
 interface User {
   id: string;
@@ -16,6 +17,7 @@ interface NakamaContextType {
   socket: Socket | null;
   logout: () => void;
   loading: boolean;
+  guestLogin: () => Promise<void>;
 }
 
 const NakamaContext = createContext<NakamaContextType | undefined>(undefined);
@@ -64,6 +66,37 @@ export const NakamaProvider: React.FC<{ children: React.ReactNode }> = ({
       const data = await error.json();
       console.log({ data });
       throw new Error(data.message);
+    }
+  };
+
+  const guestLogin = async (): Promise<void> => {
+    // todo : add catch erro
+    let deviceId = localStorage.getItem("deviceId");
+    if (!deviceId) {
+      deviceId = uuidv4();
+      localStorage.setItem("deviceId", deviceId);
+    }
+
+    try {
+      const session = await client.authenticateDevice(deviceId, true);
+      if (!session?.token || !session.refresh_token) return;
+      localStorage.setItem(TOKEN, session.token);
+      localStorage.setItem(REFRESH, session.refresh_token);
+      const account = await client.getAccount(session);
+      updateState({
+        session,
+        user: {
+          id: account.user?.id || "",
+          email: account.email || "",
+          username: account.user?.username || "",
+        },
+      });
+    } catch (err: any) {
+      console.log(
+        "Error authenticating device: %o:%o",
+        err.statusCode,
+        err.message,
+      );
     }
   };
 
@@ -124,6 +157,7 @@ export const NakamaProvider: React.FC<{ children: React.ReactNode }> = ({
         isAuthenticated: !!state.session,
         login,
         logout,
+        guestLogin,
         loading: state.loading,
       }}
     >

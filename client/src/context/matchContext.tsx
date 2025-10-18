@@ -124,6 +124,8 @@ export const MatchProvider: React.FC<{ children: React.ReactNode }> = ({
     matchId &&
       (await socket?.leaveMatch(matchId!).catch((err) => console.log(err)));
     setIsPlaying(false);
+    setIsFinding(false);
+    setMatchId(null);
   };
 
   if (socket) {

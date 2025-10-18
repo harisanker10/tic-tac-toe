@@ -4,8 +4,9 @@ let rpcFindMatch: nkruntime.RpcFunction = function (
   nk: nkruntime.Nakama,
   payload: string,
 ): string {
-  const matches = nk.matchList(10, true, null, 1, 1);
-  // matches with 1 player might need not be open due to disconnection
+  //TODO:
+  // couldn't get query/label to work. Matches are listed and opens are filtered, for now
+  const matches = nk.matchList(10, true, null, 0, 1);
   const openMatches = matches.filter((m) => {
     try {
       return JSON.parse(m.label || "{}")?.open === true;
@@ -17,7 +18,6 @@ let rpcFindMatch: nkruntime.RpcFunction = function (
   let matchIds = openMatches.map((m) => m.matchId);
 
   if (matchIds.length === 0) {
-    logger.debug("Creating a match...");
     const newMatchId = nk.matchCreate(moduleName);
     matchIds = [newMatchId];
   }

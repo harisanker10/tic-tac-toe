@@ -1,29 +1,35 @@
 const moduleName = "tic-tac-toe";
 interface State {
   emptyTicks: number;
+  // ticks since oppenent disconnected
   openTicks: number;
+  // userId in label to identify rejoining user's match, open when less than 2 players
   label: { open: boolean; users: string[] /*userId[]*/ };
+  // list of presences for dispatching messages
   presences: Record<string, nkruntime.Presence | null>;
   isPlaying: boolean;
+  // 3x3 grid represented as flat array [Mark.X, Mark.Y, ...9elts], index => position, value => Mark
   board: Board;
+  // enum X or O
   turn: Mark;
+  // a list with userId as key and the player mark(X || O) as value
   marks: Record<string, Mark | null>;
   winner: Mark | null;
   winningPosition: (typeof winningPositions)[number] | null;
+  // after the game is done, time left for resetting the game
   resetDeadline: number | null;
-  disconnectedUsers: string[]; //userId[]
+  //userId[]
+  disconnectedUsers: string[];
 }
 
+// 3 * rows, 3 * cols, 2 * Diagonals
 const winningPositions = [
-  // rows
   [0, 1, 2],
   [3, 4, 5],
   [6, 7, 8],
-  // columns
   [0, 3, 6],
   [1, 4, 7],
   [2, 5, 8],
-  // diagonals
   [0, 4, 8],
   [2, 4, 6],
 ] as const;
@@ -55,6 +61,10 @@ const matchInit = function (
   };
 };
 
+/*
+ - Accept iff rejoin or state.open 
+ - Dispatcher cannot be used to send state to client in this context, so is done in matchJoin method
+*/
 const matchJoinAttempt: nkruntime.MatchJoinAttemptFunction = function (
   ctx: nkruntime.Context,
   logger: nkruntime.Logger,
@@ -68,7 +78,6 @@ const matchJoinAttempt: nkruntime.MatchJoinAttemptFunction = function (
     ctx.userId &&
     state.disconnectedUsers !== null &&
     state.disconnectedUsers.indexOf(ctx.userId);
-  //rejoin
 
   let accept = false;
   if (typeof disconnectedUserIndex === "number" && disconnectedUserIndex >= 0) {
@@ -93,7 +102,9 @@ const matchJoin = function (
   presences: nkruntime.Presence[],
 ): { state: nkruntime.MatchState } | null {
   const state = matchState as State;
+
   // invalid players are filtered out at matchJoinAttempt so we can safely update presences
+
   presences.forEach(function (p) {
     state.presences[p.userId] = p;
     // check if the presence is a rejoin
@@ -113,13 +124,13 @@ const matchJoin = function (
     }
   });
 
-  // check if we have enough players and start
+  // Open implies there are no disconnected users, match is only marked as open after openTicks > setvalue
+  // Check if we have 2 players and is open
   if (
     totalConnectedPlayers(state) === 2 &&
     !state.isPlaying &&
     state.label.open
   ) {
-    logger.debug("initing join");
     state.label.open = false;
     state.label.users = Object.keys(state.presences);
     dispatcher.matchLabelUpdate(JSON.stringify(state.label));
@@ -133,7 +144,6 @@ const matchJoin = function (
     });
     state.marks = marks;
 
-    logger.debug("sending message");
     const message: StartMessage = {
       board: state.board,
       marks,
@@ -195,9 +205,9 @@ const matchLoop = function (
   messages: nkruntime.MatchMessage[],
 ): { state: nkruntime.MatchState } | null {
   const state = matchState as State;
-  logger.debug(
-    `Total connected players: ${totalConnectedPlayers(state)}, open: ${state.label.open}`,
-  );
+  // logger.debug(
+  //   `Total connected players: ${totalConnectedPlayers(state)}, open: ${state.label.open}`,
+  // );
   // logger.debug(`isPlaying: ${state.isPlaying}`);
   // logger.debug(`open: ${state.label.open}`);
   // logger.debug(`board: ${state.board.join(" | ")}`);
@@ -208,7 +218,7 @@ const matchLoop = function (
   if (totalConnectedPlayers(state) === 1 && !state.label.open) {
     state.openTicks++;
   }
-  // if open for 10 ticks -> player disconneced treshold reached so find a new player and update the match state
+  // if open for 10 ticks -> player disconnected treshold reached -> update the match state and label
   if (state.openTicks >= 10 && !state.label.open) {
     state.label.open = true;
     state.disconnectedUsers = [];
@@ -278,8 +288,7 @@ const matchLoop = function (
           return { state };
         }
 
-        logger.debug("updating position: " + msg.position);
-
+        // update board and turn
         state.board[msg.position] = state.marks[message.sender.userId];
         state.turn = state.turn === Mark.X ? Mark.O : Mark.X;
 
@@ -295,18 +304,23 @@ const matchLoop = function (
 
         // check win
         const winData = findWinner(state.board);
-        if (winData) {
-          // reset in 20s
-          state.resetDeadline = Date.now() + 20000;
-          state.isPlaying = false;
-          if ("mark" in winData) {
-            logger.debug("Won: " + winData.mark);
-            state.winner = winData.mark;
-            state.winningPosition = winData.winningPosition;
-            const [winnerUserId] = Object.keys(state.marks).filter(
-              (userId) => state.marks[userId] === state.winner,
-            );
-            if (winnerUserId) {
+        if (!winData) return;
+
+        // match is done
+        // reset match in 20s
+        state.resetDeadline = Date.now() + 20000;
+        state.isPlaying = false;
+
+        if ("mark" in winData) {
+          state.winner = winData.mark;
+          state.winningPosition = winData.winningPosition;
+          const [winnerUserId] = Object.keys(state.marks).filter(
+            (userId) => state.marks[userId] === state.winner,
+          );
+          if (winnerUserId) {
+            const acc = nk.accountGetId(winnerUserId);
+            // leaderboards only for registered accounts
+            if (acc.email) {
               nk.leaderboardRecordWrite(
                 LEADERBOARD_ID,
                 winnerUserId,
@@ -315,25 +329,25 @@ const matchLoop = function (
               );
             }
           }
-          if ("draw" in winData) {
-            Object.keys(state.marks).forEach((userId) => {
-              nk.leaderboardRecordWrite(LEADERBOARD_ID, userId, undefined, 5);
-            });
-          }
-          const doneMeassage: DoneMessage = {
-            board: state.board,
-            winner: state.winner,
-            winnerPositions: state.winningPosition,
-            resetDeadline: state.resetDeadline,
-          };
-
-          dispatcher.broadcastMessage(
-            OpCode.DONE,
-            JSON.stringify(doneMeassage),
-          );
-        } else {
-          logger.debug("No win data");
         }
+        if ("draw" in winData) {
+          Object.keys(state.marks).forEach((userId) => {
+            const acc = nk.accountGetId(userId);
+            // leaderboards only for registered accounts
+            if (acc.email) {
+              nk.leaderboardRecordWrite(LEADERBOARD_ID, userId, undefined, 5);
+            }
+          });
+        }
+
+        const doneMeassage: DoneMessage = {
+          board: state.board,
+          winner: state.winner,
+          winnerPositions: state.winningPosition,
+          resetDeadline: state.resetDeadline,
+        };
+
+        dispatcher.broadcastMessage(OpCode.DONE, JSON.stringify(doneMeassage));
       }
     });
   }

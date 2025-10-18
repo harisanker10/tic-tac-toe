@@ -17,9 +17,7 @@ let InitModule: nkruntime.InitModule = function (
     let operator = nkruntime.Operator.INCREMENTAL;
     // let reset = "0 0 * * 1";
     let reset = undefined;
-    let metadata = {
-      // weatherConditions: "rain",
-    };
+    let metadata = {};
     try {
       nk.leaderboardCreate(id, authoritative, sort, operator, reset, metadata);
     } catch (error) {

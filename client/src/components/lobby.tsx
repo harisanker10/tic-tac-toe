@@ -27,7 +27,7 @@ export const Lobby = () => {
       });
   };
 
-  if (isPlaying) {
+  if (isPlaying || isFinding) {
     return <Board />;
   }
   if (scoreboardOpen) {
@@ -83,7 +83,7 @@ export const Lobby = () => {
             className={`nes-btn is-secondary w-full`}
             onClick={() => setScoreBoardOpen(true)}
           >
-            Scoreboard
+            Leaderboard
           </button>
         </div>
       </div>

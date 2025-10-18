@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useNakama } from "../context/authContext";
 
 const Login: React.FC = () => {
-  const { login, loading } = useNakama();
+  const { login, loading, guestLogin } = useNakama();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,22 +25,6 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleDemoLogin = async (demoEmail: string, demoPassword: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      await login(demoEmail, demoPassword);
-      console.log("Demo login successful!");
-    } catch (err: any) {
-      setError(err.message || "Demo login failed.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="login-container">
@@ -55,23 +39,28 @@ const Login: React.FC = () => {
   }
 
   return (
-    <div className="nes-container with-title is-centered is-dark max-w-xl">
-      <p className="title text-5xl">Login</p>
+    <div className="nes-container with-title is-centered is-dark max-w-md mx-4 sm:max-w-xl">
+      <p className="title text-2xl sm:text-3xl md:text-5xl">Login</p>
 
       {/* Error Message */}
       {error && (
         <div className="nes-container is-error">
-          <span>{error}</span>
+          <span className="text-sm">{error}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 py-10">
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-3 sm:gap-4 py-6 sm:py-10"
+      >
         <div className="nes-field">
-          <label htmlFor="email">Email</label>
+          <label htmlFor="email" className="text-sm sm:text-base">
+            Email
+          </label>
           <input
             type="text"
             id="email"
-            className="nes-input is-dark"
+            className="nes-input is-dark text-sm sm:text-base"
             placeholder="super@heroes.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -81,11 +70,13 @@ const Login: React.FC = () => {
         </div>
 
         <div className="nes-field">
-          <label htmlFor="password">Password</label>
+          <label htmlFor="password" className="text-sm sm:text-base">
+            Password
+          </label>
           <input
             type="password"
             id="password"
-            className="nes-input is-dark"
+            className="nes-input is-dark text-sm sm:text-base"
             placeholder="batsignal"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -94,10 +85,10 @@ const Login: React.FC = () => {
           />
         </div>
 
-        <div className="login-buttons mt-10">
+        <div className="login-buttons mt-6 sm:mt-10 flex flex-col sm:flex-row gap-2 sm:gap-4">
           <button
             type="submit"
-            className={`nes-btn is-primary ${isLoading ? "is-disabled" : ""}`}
+            className={`nes-btn is-primary text-sm sm:text-base ${isLoading ? "is-disabled" : ""}`}
             disabled={isLoading}
           >
             {isLoading ? (
@@ -112,16 +103,11 @@ const Login: React.FC = () => {
 
           <button
             type="button"
-            className="nes-btn is-success"
-            onClick={() =>
-              handleDemoLogin(
-                `user-${Math.round(Math.random() * 1000)}@mail.comm`,
-                "batsignal",
-              )
-            }
+            className="nes-btn is-success text-sm sm:text-base w-full"
+            onClick={() => guestLogin()}
             disabled={isLoading}
           >
-            Use Demo Account
+            Guest Login
           </button>
         </div>
       </form>

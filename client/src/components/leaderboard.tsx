@@ -84,27 +84,29 @@ export const Leaderboard = ({ onExit }: { onExit: () => void }) => {
   return (
     <div className="w-full max-w-2xl mx-auto p-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <button className="nes-btn is-error" onClick={onExit}>
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <button
+          className="nes-btn is-error text-xs sm:text-sm px-2 sm:px-4"
+          onClick={onExit}
+        >
           ← Back
         </button>
-        <div className="text-center flex-1">
-          <h1 className="text-3xl font-bold text-white mb-2">Leaderboard</h1>
-          <p className="text-gray-300">Top players</p>
+        <div className="text-center flex-1 mx-2">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-1">
+            Leaderboard
+          </h1>
+          <p className="text-gray-300 text-xs sm:text-sm">Top players</p>
         </div>
-        <div className="w-20"></div> {/* Spacer for balance */}
       </div>
-
       {/* Leaderboard */}
-      <div className="nes-container is-rounded bg-white shadow-lg p-6">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+      <div className="nes-container is-rounded bg-white shadow-lg p-4 md:p-6">
+        <div className="overflow-x-auto -mx-2">
+          <table className="w-full min-w-[280px]">
             <thead>
               <tr className="border-b-2 border-gray-200">
-                <th className="text-left pb-2">Rank</th>
-                <th className="text-left pb-2">Player</th>
-                <th className="text-left pb-2">Status</th>
-                <th className="text-right pb-2">Score</th>
+                <th className="text-left pb-2 text-xs sm:text-sm">Rank</th>
+                <th className="text-left pb-2 text-xs sm:text-sm">Player</th>
+                <th className="text-right pb-2 text-xs sm:text-sm">Score</th>
               </tr>
             </thead>
             <tbody>
@@ -115,7 +117,7 @@ export const Leaderboard = ({ onExit }: { onExit: () => void }) => {
                     record.owner_id === user?.id ? "bg-blue-50" : ""
                   }`}
                 >
-                  <td className="py-3">
+                  <td className="py-2 sm:py-3">
                     <span
                       className={`nes-text ${
                         record.rank === 1
@@ -125,31 +127,39 @@ export const Leaderboard = ({ onExit }: { onExit: () => void }) => {
                             : record.rank === 3
                               ? "is-warning"
                               : ""
-                      } font-bold`}
+                      } font-bold text-xs sm:text-sm`}
                     >
                       #{record.rank}
                     </span>
                   </td>
-                  <td className="py-3">
-                    {record.user?.username ||
-                      record.user?.display_name ||
-                      `Player ${record?.owner_id?.slice(0, 8)}`}
-                    {record.owner_id === user?.id && (
-                      <span className="nes-text is-primary text-xs ml-2">
-                        (You)
+                  <td className="py-2 sm:py-3">
+                    <div className="flex flex-col">
+                      <span className="text-xs sm:text-sm truncate max-w-[100px] sm:max-w-[150px]">
+                        {record.user?.username ||
+                          record.user?.display_name ||
+                          `Player ${record?.owner_id?.slice(0, 6)}`}
                       </span>
-                    )}
+                      <div className="flex items-center gap-2 mt-1">
+                        {record.owner_id === user?.id && (
+                          <span className="nes-text is-primary text-xs">
+                            (You)
+                          </span>
+                        )}
+                        {record.user?.online ? (
+                          <span className="nes-text is-success text-xs">
+                            Online
+                          </span>
+                        ) : (
+                          <span className="nes-text is-error text-xs">
+                            Offline
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </td>
-                  <td className="py-3">
-                    {record.user?.online ? (
-                      <span className="nes-text is-success text-xs">
-                        Online
-                      </span>
-                    ) : (
-                      <span className="nes-text is-error text-xs">Offline</span>
-                    )}
+                  <td className="py-2 sm:py-3 font-bold text-xs sm:text-sm">
+                    {record.score}
                   </td>
-                  <td className="py-3 font-bold">{record.score}</td>
                 </tr>
               ))}
             </tbody>
@@ -157,32 +167,12 @@ export const Leaderboard = ({ onExit }: { onExit: () => void }) => {
         </div>
 
         {records.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-gray-500">
+          <div className="text-center py-6">
+            <p className="text-gray-500 text-sm">
               No records yet. Be the first to play!
             </p>
           </div>
         )}
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mt-6">
-        <div className="nes-container is-rounded with-title is-centered bg-white">
-          <p className="title">Total Players</p>
-          <p className="text-xl font-bold text-blue-600">{records.length}</p>
-        </div>
-        <div className="nes-container is-rounded with-title is-centered bg-white">
-          <p className="title">Your Rank</p>
-          <p className="text-xl font-bold text-green-600">
-            #{records.find((r) => r.owner_id === user?.id)?.rank || "-"}
-          </p>
-        </div>
-        <div className="nes-container is-rounded with-title is-centered bg-white">
-          <p className="title">Top Score</p>
-          <p className="text-xl font-bold text-yellow-600">
-            {records[0]?.score || 0}
-          </p>
-        </div>
       </div>
     </div>
   );
