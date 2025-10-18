@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { Client, Session, type Socket } from "@heroiclabs/nakama-js";
 
 interface User {
+  id: string;
   username: string;
   email: string;
 }
@@ -50,6 +51,7 @@ export const NakamaProvider: React.FC<{ children: React.ReactNode }> = ({
       updateState({
         session,
         user: {
+          id: session.user_id || "",
           email: account.email || "",
           username: account.user?.username || "",
         },
@@ -85,6 +87,7 @@ export const NakamaProvider: React.FC<{ children: React.ReactNode }> = ({
           updateState({
             session,
             user: {
+              id: account.user?.id || "",
               email: account.email || "",
               username: account.user?.username || "",
             },

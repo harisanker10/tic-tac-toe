@@ -293,13 +293,29 @@ const matchLoop = function (
         // check win
         const winData = findWinner(state.board);
         if (winData) {
-          // reset in 30s
-          state.resetDeadline = Date.now() + 5000;
+          // reset in 20s
+          state.resetDeadline = Date.now() + 20000;
           state.isPlaying = false;
           if ("mark" in winData) {
             logger.debug("Won: " + winData.mark);
             state.winner = winData.mark;
             state.winningPosition = winData.winningPosition;
+            const [winnerUserId] = Object.keys(state.marks).filter(
+              (userId) => state.marks[userId] === state.winner,
+            );
+            if (winnerUserId) {
+              nk.leaderboardRecordWrite(
+                LEADERBOARD_ID,
+                winnerUserId,
+                undefined,
+                10,
+              );
+            }
+          }
+          if ("draw" in winData) {
+            Object.keys(state.marks).forEach((userId) => {
+              nk.leaderboardRecordWrite(LEADERBOARD_ID, userId, undefined, 5);
+            });
           }
           const doneMeassage: DoneMessage = {
             board: state.board,

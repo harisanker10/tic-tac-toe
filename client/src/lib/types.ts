@@ -1,4 +1,6 @@
 // Use const objects instead of enums for better serialization
+export const LEADERBOARD_ID = "LEADERBOARD_ID";
+
 export const Mark = {
   X: 0,
   O: 1,

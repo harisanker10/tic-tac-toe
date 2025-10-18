@@ -1,8 +1,21 @@
+import { useEffect, useState } from "react";
+import { useNakama } from "../context/authContext";
 import { useMatch } from "../context/matchContext";
 import { Board } from "./board";
+import { LEADERBOARD_ID } from "../lib/types";
+import { Leaderboard } from "./leaderboard";
 
 export const Lobby = () => {
   const { isPlaying, findMatch, isFinding } = useMatch();
+  const { client, session } = useNakama();
+  const [scoreboardOpen, setScoreBoardOpen] = useState(false);
+
+  useEffect(() => {
+    if (!session) return;
+    client
+      .listLeaderboardRecords(session, LEADERBOARD_ID)
+      .then((d) => console.log({ d }));
+  }, [session, client]);
 
   const handleFindMatch = () => {
     findMatch()
@@ -16,6 +29,9 @@ export const Lobby = () => {
 
   if (isPlaying) {
     return <Board />;
+  }
+  if (scoreboardOpen) {
+    return <Leaderboard onExit={() => setScoreBoardOpen(false)} />;
   }
 
   return (
@@ -46,7 +62,7 @@ export const Lobby = () => {
         </div>
 
         {/* Matchmaking Button */}
-        <div className="text-center">
+        <div className="text-center flex flex-col gap-2">
           <button
             type="button"
             className={`nes-btn is-primary w-full ${isFinding ? "is-disabled" : ""}`}
@@ -61,6 +77,13 @@ export const Lobby = () => {
             ) : (
               "Find Match"
             )}
+          </button>
+          <button
+            type="button"
+            className={`nes-btn is-secondary w-full`}
+            onClick={() => setScoreBoardOpen(true)}
+          >
+            Scoreboard
           </button>
         </div>
       </div>
