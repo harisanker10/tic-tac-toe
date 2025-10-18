@@ -71,7 +71,8 @@ export function Board() {
           optimisticBoard.map((mark, index) => (
             <button
               key={index}
-              className="w-20 h-20 border-2 border-gray-400 bg-white hover:bg-gray-50 flex items-center justify-center text-2xl font-bold"
+              //@ts-ignore
+              className={`w-20 h-20 border-2 border-gray-400 bg-white hover:bg-gray-50 flex items-center justify-center text-2xl font-bold ${winStatus?.position?.includes(index) ? "nes-btn is-error" : ""}`}
               onClick={() => handleClick(index)}
             >
               {mark === Mark.X ? "X" : mark === Mark.O ? "O" : ""}

@@ -221,6 +221,7 @@ const matchLoop = function (
   // if open for 10 ticks -> player disconnected treshold reached -> update the match state and label
   if (state.openTicks >= 10 && !state.label.open) {
     state.label.open = true;
+    state.label.users = Object.keys(state.presences);
     state.disconnectedUsers = [];
     dispatcher.matchLabelUpdate(JSON.stringify(state.label));
     state.openTicks = 0;
@@ -308,7 +309,7 @@ const matchLoop = function (
 
         // match is done
         // reset match in 20s
-        state.resetDeadline = Date.now() + 20000;
+        state.resetDeadline = Date.now() + 2000000;
         state.isPlaying = false;
 
         if ("mark" in winData) {
