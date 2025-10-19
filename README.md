@@ -1,6 +1,6 @@
 # Tic Tac Toe
 
-A real-time multiplayer Tic Tac Toe game built with [nakama](https://heroiclabs.com/nakama/) and react.
+A Server authoritative real-time multiplayer Tic Tac Toe game built with [nakama](https://heroiclabs.com/nakama/) and react.
 
 [Live Demo](https://tictactoe.hsanker.in)
 
