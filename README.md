@@ -19,7 +19,7 @@ A real-time multiplayer Tic Tac Toe game built with [nakama](https://heroiclabs.
 - [Nakama](https://heroiclabs.com/nakama/) was a true [nakama](https://cotoacademy.com/meaning-nakama-used-japanese-expressions/#:~:text=%2Dpronounced%20%E2%80%9CNakama%E2%80%9D%20is%20a%20word%20that%20translates%20to%20your%20friend%2C%20teammate%2C%20or%20comrade.) while building this, doing all the heavylifting. Nakama handles Auth, Matchmaking, Leaderboard.
 - For a simple project like this, implementing a separate backend would have been redundant. All game logic is implemented within Nakama's MatchHandler lifecycle methods and an rpc for client to fetch matches.
 - The server follows Nakama's documentation patterns and best practices.
-- The server is built using a Dockerfile that bundles all match handlers and RPC functions into a custom Nakama image which was recommended by the docs.
+- The server is built using a Dockerfile that bundles all match handlers and RPC functions into a custom Nakama image. This is the recommended way in the docs.
 - TypeScript was chosen for server-side development due to familiarity and Nakama's JavaScript runtime support.
 
 ### React Client
@@ -30,8 +30,7 @@ A real-time multiplayer Tic Tac Toe game built with [nakama](https://heroiclabs.
 
 ### Deployment
 
-- The docker compose file bundles both these services along with postgres(for nakama) and caddy2(for easy ssl and routing)
-- In a VPS, this compose file is applied with a valid Caddyfile at root for routing.
+- The docker compose file at root bundles both server and client services along with postgres(for nakama). Apply this and everything should be up.
 
 ## Installation & Local Setup
 
@@ -70,24 +69,33 @@ After this, game will be available at http://localhost:5173
 
 - The current implementation uses a workaround for match discovery due to difficulties with Nakama's query/label: I couldn't make the query/label filtering work. I wanted to query open matches as label has open field and is formatted as JSON.
 
-```
+  ```
+  // matchInit method, label is set:
+  return {
+    state,
+    tickRate: 1,
+    label: JSON.stringify({ open: true, userIds: [] }),
+  };
+
+
+  // Then querying in findMatchRpc
   const limit = 10;
   const isAuthoritative = true;
   const label = `open:true`;
   const minSize = null;
   const maxSize = null;
   const matches = nk.matchList(
-    limit,
-    isAuthoritative,
-    label,
-    minSize,
-    maxSize,
-    null,
+  limit,
+  isAuthoritative,
+  label,
+  minSize,
+  maxSize,
+  null,
   );
 
-```
+  ```
 
-This query was providing not open matches also. For the scope of this project, I just listed all and filtered.
+  This query was providing not open matches also. For the scope of this project, I just listed all and filtered.
 
 - Server key is exposed
 - **Client-Side State Management Issues**: There are known issues with client-side state synchronization. If you encounter any problems during gameplay or navigation, **please refresh the page** to reset the application state.
